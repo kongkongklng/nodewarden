@@ -13,6 +13,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
 jobs:
   sync:
     runs-on: ubuntu-latest
@@ -131,6 +135,23 @@ jobs:
             git push origin main
           fi
 
+      - uses: actions/setup-node@v4
+        if: steps.check.outputs.needs_update == 'true'
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        if: steps.check.outputs.needs_update == 'true'
+        run: npm ci
+
+      - name: Deploy Worker
+        if: steps.check.outputs.needs_update == 'true'
+        run: npm run deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
       - name: Summary
         run: |
           if [ "${{ steps.check.outputs.needs_update }}" = "true" ]; then
@@ -138,6 +159,7 @@ jobs:
             echo "- **Mode:** ${{ steps.resolve.outputs.mode }}" >> $GITHUB_STEP_SUMMARY
             echo "- **Tag:** ${{ steps.resolve.outputs.latest_tag || 'N/A (manual)' }}" >> $GITHUB_STEP_SUMMARY
             echo "- **Commit:** \`${{ steps.resolve.outputs.target_sha }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "- **Deploy:** Cloudflare deploy step completed." >> $GITHUB_STEP_SUMMARY
           else
             echo "### Nothing to update" >> $GITHUB_STEP_SUMMARY
           fi
